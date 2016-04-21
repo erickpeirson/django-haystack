@@ -84,7 +84,13 @@ def do_update(backend, index, qs, start, end, total, verbosity=1, commit=True):
     # Get a clone of the QuerySet so that the cache doesn't bloat up
     # in memory. Useful when reindexing large amounts of data.
     small_cache_qs = qs.all()
-    current_qs = small_cache_qs[start:end]
+    # Slicing a QuerySet when values() or values_list() is employed limits the
+    #  result set by ROWS rather than instances. So if a field selection spans
+    #  an M2M, the result set may end in the "middle" of results for a given
+    #  instance. Filtering by pk is pretty fast, and ensures that we get
+    #  complete data for all instances in the batch.
+    selected_pks = small_cache_qs[start:end].values_list('pk', flat=True)
+    current_qs = qs.filter(pk__in=selected_pks)
 
     if verbosity >= 2:
         if hasattr(os, 'getppid') and os.getpid() == os.getppid():
